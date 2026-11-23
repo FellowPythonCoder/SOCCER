@@ -10,7 +10,7 @@ import { ShooterMesh } from './render/shooterMesh.js';
 import { BallView, Effects } from './render/ballView.js';
 import { CameraRig } from './render/camera.js';
 import { Hud } from './ui/hud.js';
-import { predictPath } from './physics/ball.js';
+import { predictPath, predictCrossing } from './physics/ball.js';
 
 const app = document.getElementById('app');
 
@@ -299,17 +299,32 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+let lastPromptKey = '';
 function updatePrompts() {
   if (game.phase === PHASE.kickoff) {
-    const t = game.phaseTime;
-    hud.showPrompt('Striker approaching…');
-  } else if (game.phase === PHASE.live && !game.ballFrozen) {
-    const t = game.shotInfo?.telegraph ?? 1;
-    hud.showPrompt('Shot incoming — press R to dive', 1 - (game.time - (game.ballShotAt ?? game.time)) / 1.2);
-  } else if (game.phase === PHASE.resolved) {
-    hud.hidePrompt();
+    const t = -game.phaseTime;
+    hud.showPrompt(t > 0 ? 'Get set…' : 'Striker approaching…');
+    return;
+  }
+  if (game.phase !== PHASE.live) {
+    if (game.phase === PHASE.resolved) hud.hidePrompt();
+    else hud.showPrompt('Preparing next shot…');
+    return;
+  }
+  if (game.ballFrozen) {
+    hud.showPrompt(game.shooter.state === 'windup' || game.shooter.state === 'plant'
+      ? 'Shot incoming — press R to dive'
+      : 'Striker approaching…');
+    return;
+  }
+  // time to arrival, shown as a shrinking bar and a hint
+  const crossing = predictCrossing(game.ball, 0, 3);
+  if (crossing) {
+    const t = crossing.t;
+    const hint = t > 0.85 ? 'Watch the flight' : t > 0.45 ? 'Wait for it…' : t > 0.1 ? 'NOW — press R' : '';
+    hud.showPrompt(hint, Math.min(1, t / 1.4));
   } else {
-    hud.showPrompt('Preparing next shot…');
+    hud.showPrompt('');
   }
 }
 
