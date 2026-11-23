@@ -51,7 +51,11 @@ function makeEl(tag = 'div', id = '') {
     getContext(type) { return type === '2d' ? make2d() : makeGL(); },
     set className(v) { this._cls = String(v); },
     get className() { return this._cls; },
-    set innerHTML(v) { this._html = v; },
+    set innerHTML(v) {
+      // real DOM semantics: assigning innerHTML destroys existing children
+      this._html = v;
+      this.children.length = 0;
+    },
     get innerHTML() { return this._html; },
     set textContent(v) { this._text = v; },
     get textContent() { return this._text; },
@@ -235,4 +239,20 @@ test('the exposed frame loop survives many simulated frames', () => {
     }
   });
   assert.ok(Number.isFinite(g.ball.p.x));
+});
+
+test('the WebGL canvas survives HUD construction and mount order', () => {
+  // Regression: Hud.build() assigns innerHTML to its root. If the HUD and the
+  // canvas shared a container, that assignment silently destroyed the canvas
+  // and the game rendered nothing but a background.
+  const app = getEl('app');
+  const ids = app.children.map((c) => c.id);
+  assert.ok(ids.includes('scene-root'), `canvas layer missing, app children: ${ids.join(',')}`);
+  assert.ok(ids.includes('hud-root'), `hud layer missing, app children: ${ids.join(',')}`);
+  const sceneRoot = app.children.find((c) => c.id === 'scene-root');
+  assert.ok(sceneRoot.children.length > 0, 'the renderer canvas must be inside the canvas layer');
+  const hudRoot = app.children.find((c) => c.id === 'hud-root');
+  assert.ok(hudRoot.innerHTML.length > 0, 'the HUD must have built its markup');
+  // and the canvas layer must not have been emptied by that build
+  assert.ok(sceneRoot.children.length > 0, 'HUD build must not clear the canvas layer');
 });

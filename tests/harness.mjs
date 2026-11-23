@@ -14,7 +14,7 @@ class El {
   constructor(tag='div'){ this.tagName=tag.toUpperCase(); this.classList=new ClassList(this); this.children=[]; this.style={}; this.dataset={}; this._html=''; this._text=''; this.listeners={}; }
   set className(v){ this.classList.set = new Set(String(v).split(/\s+/).filter(Boolean)); this.classList.sync(); }
   get className(){ return this._className || ''; }
-  set innerHTML(v){ this._html=v; this.children=[]; }
+  set innerHTML(v){ this._html=v; this.children.length = 0; }
   get innerHTML(){ return this._html; }
   set textContent(v){ this._text=v; }
   get textContent(){ return this._text; }
@@ -34,6 +34,11 @@ class El {
   setAttribute(){}
   getAttribute(){ return null; }
   focus(){} blur(){}
+}
+const REGISTRY = new Map();
+function registryEl(id) {
+  if (!REGISTRY.has(id)) REGISTRY.set(id, new El());
+  return REGISTRY.get(id);
 }
 function makeEl(){ return new El(); }
 
@@ -95,7 +100,7 @@ export function installDom() {
     createElement(tag){ return new El(tag); },
     createElementNS(ns, tag){ return new El(tag); },
     createTextNode(t){ const e = new El('#text'); e.textContent = t; return e; },
-    getElementById(id){ return makeEl(); },
+    getElementById(id){ return registryEl(id); },
     querySelector(){ return makeEl(); },
     querySelectorAll(){ return []; },
     addEventListener(){}, removeEventListener(){},

@@ -14,16 +14,26 @@ import { predictPath, predictCrossing } from './physics/ball.js';
 
 const app = document.getElementById('app');
 
+// Two sibling layers so the HUD can rebuild itself without ever touching (or
+// wiping out) the WebGL canvas. This was a real bug: the HUD's innerHTML reset
+// was destroying the canvas element and leaving a blank screen.
+const canvasRoot = document.createElement('div');
+canvasRoot.id = 'scene-root';
+app.appendChild(canvasRoot);
+const hudRoot = document.createElement('div');
+hudRoot.id = 'hud-root';
+app.appendChild(hudRoot);
+
 // ---------------------------------------------------------------- renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth || 1280, window.innerHeight || 720);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.06;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-app.appendChild(renderer.domElement);
+canvasRoot.appendChild(renderer.domElement);
 
 const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 400);
 camera.position.set(0, 3.4, 9);
@@ -40,7 +50,7 @@ scene.add(shooterMesh.group);
 const ballView = new BallView(scene);
 const effects = new Effects(scene);
 const rig = new CameraRig(camera, renderer.domElement);
-const hud = new Hud(app);
+const hud = new Hud(hudRoot);
 
 // predicted-trajectory guide
 const guideGeo = new THREE.BufferGeometry();
@@ -346,11 +356,28 @@ function maybeAssist(dt) {
   }
 }
 
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+function onResize() {
+  const w = window.innerWidth || 1280;
+  const h = window.innerHeight || 720;
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+  renderer.setSize(w, h);
+}
+window.addEventListener('resize', onResize);
+onResize();
+
+// Any uncaught error during play is shown on screen: a silent blank page is the
+// worst possible failure mode for a game.
+function showFatal(err) {
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;inset:auto 16px 16px 16px;z-index:99;padding:14px 16px;'
+    + 'border-radius:10px;background:rgba(60,10,20,.94);border:1px solid rgba(255,90,120,.5);'
+    + 'color:#ffdde3;font:12px/1.5 ui-monospace,monospace;white-space:pre-wrap;max-height:40vh;overflow:auto';
+  box.textContent = `Something went wrong:\n${err?.message ?? err}\n\n${(err?.stack ?? '').split('\n').slice(0, 6).join('\n')}`;
+  document.body.appendChild(box);
+}
+window.addEventListener('error', (e) => showFatal(e.error ?? e.message));
+window.addEventListener('unhandledrejection', (e) => showFatal(e.reason));
 
 // boot: show the ball at the spot behind the menu
 ballView.reset(game.ball);
